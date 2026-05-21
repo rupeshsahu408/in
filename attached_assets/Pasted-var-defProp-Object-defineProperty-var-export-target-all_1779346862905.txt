@@ -1,0 +1,1069 @@
+var __defProp = Object.defineProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
+// server/index.ts
+import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
+
+// server/db.ts
+import { Pool, neonConfig } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import ws from "ws";
+
+// shared/schema.ts
+var schema_exports = {};
+__export(schema_exports, {
+  commentLikes: () => commentLikes,
+  comments: () => comments,
+  conversationMembers: () => conversationMembers,
+  conversations: () => conversations,
+  follows: () => follows,
+  insertCommentSchema: () => insertCommentSchema,
+  insertPostSchema: () => insertPostSchema,
+  insertUserSchema: () => insertUserSchema,
+  likes: () => likes,
+  messages: () => messages,
+  notifications: () => notifications,
+  postMedia: () => postMedia,
+  postMediaRelations: () => postMediaRelations,
+  posts: () => posts,
+  postsRelations: () => postsRelations,
+  saves: () => saves,
+  stories: () => stories,
+  storyViews: () => storyViews,
+  users: () => users,
+  usersRelations: () => usersRelations
+});
+import {
+  pgTable,
+  serial,
+  varchar,
+  text,
+  timestamp,
+  integer,
+  boolean,
+  index,
+  uniqueIndex,
+  primaryKey
+} from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { createInsertSchema } from "drizzle-zod";
+var users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    firebaseUid: varchar("firebase_uid", { length: 128 }).notNull().unique(),
+    username: varchar("username", { length: 32 }).notNull().unique(),
+    email: varchar("email", { length: 256 }).notNull(),
+    fullName: varchar("full_name", { length: 80 }).default(""),
+    bio: text("bio").default(""),
+    website: varchar("website", { length: 256 }).default(""),
+    avatarUrl: text("avatar_url").default(""),
+    gender: varchar("gender", { length: 16 }).default(""),
+    isPrivate: boolean("is_private").default(false).notNull(),
+    isVerified: boolean("is_verified").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (t) => ({
+    usernameIdx: uniqueIndex("users_username_idx").on(t.username)
+  })
+);
+var posts = pgTable(
+  "posts",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    caption: text("caption").default(""),
+    location: varchar("location", { length: 120 }).default(""),
+    commentsDisabled: boolean("comments_disabled").default(false).notNull(),
+    hideLikeCount: boolean("hide_like_count").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (t) => ({
+    userIdx: index("posts_user_idx").on(t.userId),
+    createdIdx: index("posts_created_idx").on(t.createdAt)
+  })
+);
+var postMedia = pgTable(
+  "post_media",
+  {
+    id: serial("id").primaryKey(),
+    postId: integer("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    type: varchar("type", { length: 16 }).default("image").notNull(),
+    position: integer("position").default(0).notNull()
+  },
+  (t) => ({
+    postIdx: index("post_media_post_idx").on(t.postId)
+  })
+);
+var likes = pgTable(
+  "likes",
+  {
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    postId: integer("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.postId] }),
+    postIdx: index("likes_post_idx").on(t.postId)
+  })
+);
+var saves = pgTable(
+  "saves",
+  {
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    postId: integer("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.postId] })
+  })
+);
+var comments = pgTable(
+  "comments",
+  {
+    id: serial("id").primaryKey(),
+    postId: integer("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    parentId: integer("parent_id"),
+    text: text("text").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (t) => ({
+    postIdx: index("comments_post_idx").on(t.postId)
+  })
+);
+var commentLikes = pgTable(
+  "comment_likes",
+  {
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    commentId: integer("comment_id").notNull().references(() => comments.id, { onDelete: "cascade" })
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.userId, t.commentId] })
+  })
+);
+var follows = pgTable(
+  "follows",
+  {
+    followerId: integer("follower_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    followingId: integer("following_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.followerId, t.followingId] }),
+    followingIdx: index("follows_following_idx").on(t.followingId)
+  })
+);
+var stories = pgTable(
+  "stories",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    mediaUrl: text("media_url").notNull(),
+    type: varchar("type", { length: 16 }).default("image").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at").default(sql`NOW() + INTERVAL '24 hours'`).notNull()
+  },
+  (t) => ({
+    userIdx: index("stories_user_idx").on(t.userId)
+  })
+);
+var storyViews = pgTable(
+  "story_views",
+  {
+    storyId: integer("story_id").notNull().references(() => stories.id, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    viewedAt: timestamp("viewed_at").defaultNow().notNull()
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.storyId, t.userId] })
+  })
+);
+var notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    actorId: integer("actor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    type: varchar("type", { length: 24 }).notNull(),
+    postId: integer("post_id").references(() => posts.id, { onDelete: "cascade" }),
+    commentId: integer("comment_id").references(() => comments.id, { onDelete: "cascade" }),
+    text: text("text").default(""),
+    isRead: boolean("is_read").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (t) => ({
+    userIdx: index("notifications_user_idx").on(t.userId)
+  })
+);
+var conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastMessageAt: timestamp("last_message_at").defaultNow().notNull()
+});
+var conversationMembers = pgTable(
+  "conversation_members",
+  {
+    conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    lastReadAt: timestamp("last_read_at").defaultNow().notNull()
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.conversationId, t.userId] }),
+    userIdx: index("conv_members_user_idx").on(t.userId)
+  })
+);
+var messages = pgTable(
+  "messages",
+  {
+    id: serial("id").primaryKey(),
+    conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+    senderId: integer("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    text: text("text").default(""),
+    mediaUrl: text("media_url").default(""),
+    createdAt: timestamp("created_at").defaultNow().notNull()
+  },
+  (t) => ({
+    convIdx: index("messages_conv_idx").on(t.conversationId)
+  })
+);
+var usersRelations = relations(users, ({ many }) => ({
+  posts: many(posts),
+  followers: many(follows, { relationName: "followers" }),
+  following: many(follows, { relationName: "following" })
+}));
+var postsRelations = relations(posts, ({ one, many }) => ({
+  user: one(users, { fields: [posts.userId], references: [users.id] }),
+  media: many(postMedia),
+  likes: many(likes),
+  comments: many(comments)
+}));
+var postMediaRelations = relations(postMedia, ({ one }) => ({
+  post: one(posts, { fields: [postMedia.postId], references: [posts.id] })
+}));
+var insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true
+});
+var insertPostSchema = createInsertSchema(posts).omit({
+  id: true,
+  createdAt: true
+});
+var insertCommentSchema = createInsertSchema(comments).omit({
+  id: true,
+  createdAt: true
+});
+
+// server/db.ts
+neonConfig.webSocketConstructor = ws;
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not set");
+}
+var pool = new Pool({ connectionString: process.env.DATABASE_URL });
+var db = drizzle({ client: pool, schema: schema_exports });
+
+// server/auth.ts
+import { eq } from "drizzle-orm";
+
+// server/firebase-admin.ts
+import admin from "firebase-admin";
+var initialized = false;
+function init() {
+  if (initialized) return;
+  if (admin.apps.length) {
+    initialized = true;
+    return;
+  }
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  if (projectId && clientEmail && privateKey) {
+    admin.initializeApp({
+      credential: admin.credential.cert({ projectId, clientEmail, privateKey })
+    });
+    initialized = true;
+    return;
+  }
+  if (projectId) {
+    admin.initializeApp({ projectId });
+    initialized = true;
+    return;
+  }
+  console.warn(
+    "[firebase-admin] No service account credentials found. Token verification will be insecure (development only)."
+  );
+}
+async function verifyFirebaseToken(idToken) {
+  init();
+  if (admin.apps.length) {
+    try {
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      return {
+        uid: decoded.uid,
+        email: decoded.email,
+        name: decoded.name,
+        picture: decoded.picture
+      };
+    } catch (e) {
+      if (process.env.NODE_ENV === "production") throw e;
+    }
+  }
+  try {
+    const [, payloadB64] = idToken.split(".");
+    const payload = JSON.parse(Buffer.from(payloadB64, "base64").toString("utf8"));
+    if (!payload.user_id && !payload.sub) throw new Error("Invalid token payload");
+    return {
+      uid: payload.user_id || payload.sub,
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture
+    };
+  } catch {
+    throw new Error("Invalid token");
+  }
+}
+
+// server/auth.ts
+var tokenCache = /* @__PURE__ */ new Map();
+async function authMiddleware(req, _res, next) {
+  const auth = req.headers.authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return next();
+  try {
+    const cached = tokenCache.get(token);
+    if (cached && cached.exp > Date.now()) {
+      req.userId = cached.userId;
+      req.firebaseUid = cached.uid;
+      return next();
+    }
+    const decoded = await verifyFirebaseToken(token);
+    const [user] = await db.select({ id: users.id }).from(users).where(eq(users.firebaseUid, decoded.uid)).limit(1);
+    if (user) {
+      req.userId = user.id;
+      req.firebaseUid = decoded.uid;
+      tokenCache.set(token, {
+        uid: decoded.uid,
+        userId: user.id,
+        exp: Date.now() + 5 * 60 * 1e3
+      });
+    } else {
+      req.firebaseUid = decoded.uid;
+    }
+  } catch {
+  }
+  next();
+}
+function requireAuth(req, res, next) {
+  if (!req.userId) return res.status(401).json({ error: "Unauthorized" });
+  next();
+}
+
+// server/routes/users.ts
+import { Router } from "express";
+import { and, desc, eq as eq2, ilike, or, sql as sql2, ne } from "drizzle-orm";
+var router = Router();
+router.post("/sync", async (req, res) => {
+  const auth = req.headers.authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return res.status(401).json({ error: "Missing token" });
+  let decoded;
+  try {
+    decoded = await verifyFirebaseToken(token);
+  } catch {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+  const existing = await db.select().from(users).where(eq2(users.firebaseUid, decoded.uid)).limit(1);
+  if (existing.length) return res.json(existing[0]);
+  const baseUsername = (decoded.name || decoded.email?.split("@")[0] || "user").toLowerCase().replace(/[^a-z0-9._]/g, "").slice(0, 24) || `user${Date.now()}`;
+  let username = baseUsername;
+  let suffix = 0;
+  while (true) {
+    const taken = await db.select({ id: users.id }).from(users).where(eq2(users.username, username)).limit(1);
+    if (!taken.length) break;
+    suffix += 1;
+    username = `${baseUsername}${suffix}`;
+  }
+  const [created] = await db.insert(users).values({
+    firebaseUid: decoded.uid,
+    email: decoded.email || `${decoded.uid}@firebase.local`,
+    username,
+    fullName: decoded.name || "",
+    avatarUrl: decoded.picture || ""
+  }).returning();
+  res.json(created);
+});
+router.get("/me", requireAuth, async (req, res) => {
+  const [u] = await db.select().from(users).where(eq2(users.id, req.userId)).limit(1);
+  res.json(u);
+});
+router.patch("/me", requireAuth, async (req, res) => {
+  const { fullName, bio, website, gender, isPrivate, avatarUrl, username } = req.body;
+  const updates = {};
+  if (fullName !== void 0) updates.fullName = String(fullName).slice(0, 80);
+  if (bio !== void 0) updates.bio = String(bio).slice(0, 200);
+  if (website !== void 0) updates.website = String(website).slice(0, 256);
+  if (gender !== void 0) updates.gender = String(gender).slice(0, 16);
+  if (isPrivate !== void 0) updates.isPrivate = Boolean(isPrivate);
+  if (avatarUrl !== void 0) updates.avatarUrl = String(avatarUrl);
+  if (username !== void 0) {
+    const u = String(username).toLowerCase().replace(/[^a-z0-9._]/g, "").slice(0, 30);
+    if (u.length < 3) return res.status(400).json({ error: "Username too short" });
+    const taken = await db.select({ id: users.id }).from(users).where(and(eq2(users.username, u), ne(users.id, req.userId))).limit(1);
+    if (taken.length) return res.status(400).json({ error: "Username already taken" });
+    updates.username = u;
+  }
+  const [updated] = await db.update(users).set(updates).where(eq2(users.id, req.userId)).returning();
+  res.json(updated);
+});
+router.get("/profile/:username", async (req, res) => {
+  const [user] = await db.select().from(users).where(eq2(users.username, req.params.username)).limit(1);
+  if (!user) return res.status(404).json({ error: "User not found" });
+  const [{ count: postCount }] = await db.select({ count: sql2`count(*)::int` }).from(posts).where(eq2(posts.userId, user.id));
+  const [{ count: followerCount }] = await db.select({ count: sql2`count(*)::int` }).from(follows).where(eq2(follows.followingId, user.id));
+  const [{ count: followingCount }] = await db.select({ count: sql2`count(*)::int` }).from(follows).where(eq2(follows.followerId, user.id));
+  let isFollowing = false;
+  if (req.userId) {
+    const [f] = await db.select().from(follows).where(
+      and(eq2(follows.followerId, req.userId), eq2(follows.followingId, user.id))
+    ).limit(1);
+    isFollowing = Boolean(f);
+  }
+  res.json({
+    ...user,
+    postCount,
+    followerCount,
+    followingCount,
+    isFollowing,
+    isMe: req.userId === user.id
+  });
+});
+router.get("/profile/:username/posts", async (req, res) => {
+  const [user] = await db.select({ id: users.id }).from(users).where(eq2(users.username, req.params.username)).limit(1);
+  if (!user) return res.status(404).json({ error: "Not found" });
+  const rows = await db.select({
+    id: posts.id,
+    caption: posts.caption,
+    createdAt: posts.createdAt,
+    mediaUrl: sql2`(SELECT url FROM post_media WHERE post_id = ${posts.id} ORDER BY position ASC LIMIT 1)`,
+    mediaCount: sql2`(SELECT COUNT(*)::int FROM post_media WHERE post_id = ${posts.id})`,
+    likeCount: sql2`(SELECT COUNT(*)::int FROM likes WHERE post_id = ${posts.id})`,
+    commentCount: sql2`(SELECT COUNT(*)::int FROM comments WHERE post_id = ${posts.id})`
+  }).from(posts).where(eq2(posts.userId, user.id)).orderBy(desc(posts.createdAt)).limit(60);
+  res.json(rows);
+});
+router.post("/:id/follow", requireAuth, async (req, res) => {
+  const targetId = Number(req.params.id);
+  if (targetId === req.userId) return res.status(400).json({ error: "Cannot follow self" });
+  await db.insert(follows).values({ followerId: req.userId, followingId: targetId }).onConflictDoNothing();
+  await db.insert(notifications).values({
+    userId: targetId,
+    actorId: req.userId,
+    type: "follow"
+  });
+  res.json({ ok: true });
+});
+router.delete("/:id/follow", requireAuth, async (req, res) => {
+  const targetId = Number(req.params.id);
+  await db.delete(follows).where(
+    and(eq2(follows.followerId, req.userId), eq2(follows.followingId, targetId))
+  );
+  res.json({ ok: true });
+});
+router.get("/search", async (req, res) => {
+  const q = String(req.query.q || "").trim();
+  if (!q) return res.json([]);
+  const rows = await db.select({
+    id: users.id,
+    username: users.username,
+    fullName: users.fullName,
+    avatarUrl: users.avatarUrl,
+    isVerified: users.isVerified
+  }).from(users).where(or(ilike(users.username, `%${q}%`), ilike(users.fullName, `%${q}%`))).limit(20);
+  res.json(rows);
+});
+router.get("/suggested", async (req, res) => {
+  const me = req.userId || 0;
+  const rows = await db.select({
+    id: users.id,
+    username: users.username,
+    fullName: users.fullName,
+    avatarUrl: users.avatarUrl,
+    isVerified: users.isVerified
+  }).from(users).where(
+    and(
+      ne(users.id, me),
+      sql2`${users.id} NOT IN (SELECT following_id FROM follows WHERE follower_id = ${me})`
+    )
+  ).limit(8);
+  res.json(rows);
+});
+router.get("/profile/:username/followers", async (req, res) => {
+  const [u] = await db.select({ id: users.id }).from(users).where(eq2(users.username, req.params.username)).limit(1);
+  if (!u) return res.json([]);
+  const rows = await db.select({
+    id: users.id,
+    username: users.username,
+    fullName: users.fullName,
+    avatarUrl: users.avatarUrl
+  }).from(follows).innerJoin(users, eq2(users.id, follows.followerId)).where(eq2(follows.followingId, u.id)).limit(100);
+  res.json(rows);
+});
+router.get("/profile/:username/following", async (req, res) => {
+  const [u] = await db.select({ id: users.id }).from(users).where(eq2(users.username, req.params.username)).limit(1);
+  if (!u) return res.json([]);
+  const rows = await db.select({
+    id: users.id,
+    username: users.username,
+    fullName: users.fullName,
+    avatarUrl: users.avatarUrl
+  }).from(follows).innerJoin(users, eq2(users.id, follows.followingId)).where(eq2(follows.followerId, u.id)).limit(100);
+  res.json(rows);
+});
+var users_default = router;
+
+// server/routes/posts.ts
+import { Router as Router2 } from "express";
+import { and as and2, desc as desc2, eq as eq3, sql as sql3, inArray, or as or2 } from "drizzle-orm";
+var router2 = Router2();
+async function hydratePosts(rows, me) {
+  if (!rows.length) return [];
+  const ids = rows.map((p) => p.id);
+  const media = await db.select().from(postMedia).where(inArray(postMedia.postId, ids));
+  const myLikes = me ? await db.select({ postId: likes.postId }).from(likes).where(and2(eq3(likes.userId, me), inArray(likes.postId, ids))) : [];
+  const mySaves = me ? await db.select({ postId: saves.postId }).from(saves).where(and2(eq3(saves.userId, me), inArray(saves.postId, ids))) : [];
+  const likedSet = new Set(myLikes.map((l) => l.postId));
+  const savedSet = new Set(mySaves.map((l) => l.postId));
+  return rows.map((p) => ({
+    ...p,
+    media: media.filter((m) => m.postId === p.id).sort((a, b) => a.position - b.position),
+    likedByMe: likedSet.has(p.id),
+    savedByMe: savedSet.has(p.id)
+  }));
+}
+router2.get("/feed", async (req, res) => {
+  const me = req.userId || null;
+  const rows = await db.select({
+    id: posts.id,
+    caption: posts.caption,
+    location: posts.location,
+    createdAt: posts.createdAt,
+    userId: posts.userId,
+    username: users.username,
+    avatarUrl: users.avatarUrl,
+    isVerified: users.isVerified,
+    likeCount: sql3`(SELECT COUNT(*)::int FROM likes WHERE post_id = ${posts.id})`,
+    commentCount: sql3`(SELECT COUNT(*)::int FROM comments WHERE post_id = ${posts.id})`
+  }).from(posts).innerJoin(users, eq3(users.id, posts.userId)).where(
+    me ? or2(
+      eq3(posts.userId, me),
+      sql3`${posts.userId} IN (SELECT following_id FROM follows WHERE follower_id = ${me})`
+    ) : sql3`TRUE`
+  ).orderBy(desc2(posts.createdAt)).limit(40);
+  res.json(await hydratePosts(rows, me));
+});
+router2.get("/explore", async (req, res) => {
+  const me = req.userId || 0;
+  const rows = await db.select({
+    id: posts.id,
+    caption: posts.caption,
+    createdAt: posts.createdAt,
+    userId: posts.userId,
+    username: users.username,
+    avatarUrl: users.avatarUrl,
+    isVerified: users.isVerified,
+    likeCount: sql3`(SELECT COUNT(*)::int FROM likes WHERE post_id = ${posts.id})`,
+    commentCount: sql3`(SELECT COUNT(*)::int FROM comments WHERE post_id = ${posts.id})`
+  }).from(posts).innerJoin(users, eq3(users.id, posts.userId)).where(
+    me ? sql3`${posts.userId} != ${me} AND ${posts.userId} NOT IN (SELECT following_id FROM follows WHERE follower_id = ${me})` : sql3`TRUE`
+  ).orderBy(
+    desc2(sql3`(SELECT COUNT(*) FROM likes WHERE post_id = ${posts.id})`),
+    desc2(posts.createdAt)
+  ).limit(60);
+  res.json(await hydratePosts(rows, me || null));
+});
+router2.get("/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const rows = await db.select({
+    id: posts.id,
+    caption: posts.caption,
+    location: posts.location,
+    createdAt: posts.createdAt,
+    userId: posts.userId,
+    username: users.username,
+    avatarUrl: users.avatarUrl,
+    isVerified: users.isVerified,
+    likeCount: sql3`(SELECT COUNT(*)::int FROM likes WHERE post_id = ${posts.id})`,
+    commentCount: sql3`(SELECT COUNT(*)::int FROM comments WHERE post_id = ${posts.id})`
+  }).from(posts).innerJoin(users, eq3(users.id, posts.userId)).where(eq3(posts.id, id));
+  if (!rows.length) return res.status(404).json({ error: "Not found" });
+  const [hydrated] = await hydratePosts(rows, req.userId || null);
+  res.json(hydrated);
+});
+router2.post("/", requireAuth, async (req, res) => {
+  const { caption = "", location = "", media = [] } = req.body;
+  if (!Array.isArray(media) || media.length === 0)
+    return res.status(400).json({ error: "Media is required" });
+  const [post] = await db.insert(posts).values({
+    userId: req.userId,
+    caption: caption.slice(0, 2200),
+    location: location.slice(0, 120)
+  }).returning();
+  await db.insert(postMedia).values(
+    media.map((m, i) => ({
+      postId: post.id,
+      url: m.url,
+      type: m.type === "video" ? "video" : "image",
+      position: i
+    }))
+  );
+  res.json(post);
+});
+router2.delete("/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const [p] = await db.select().from(posts).where(eq3(posts.id, id));
+  if (!p) return res.status(404).json({ error: "Not found" });
+  if (p.userId !== req.userId) return res.status(403).json({ error: "Forbidden" });
+  await db.delete(posts).where(eq3(posts.id, id));
+  res.json({ ok: true });
+});
+router2.post("/:id/like", requireAuth, async (req, res) => {
+  const postId = Number(req.params.id);
+  await db.insert(likes).values({ userId: req.userId, postId }).onConflictDoNothing();
+  const [p] = await db.select({ userId: posts.userId }).from(posts).where(eq3(posts.id, postId));
+  if (p && p.userId !== req.userId) {
+    await db.insert(notifications).values({
+      userId: p.userId,
+      actorId: req.userId,
+      type: "like",
+      postId
+    });
+  }
+  res.json({ ok: true });
+});
+router2.delete("/:id/like", requireAuth, async (req, res) => {
+  const postId = Number(req.params.id);
+  await db.delete(likes).where(and2(eq3(likes.userId, req.userId), eq3(likes.postId, postId)));
+  res.json({ ok: true });
+});
+router2.post("/:id/save", requireAuth, async (req, res) => {
+  const postId = Number(req.params.id);
+  await db.insert(saves).values({ userId: req.userId, postId }).onConflictDoNothing();
+  res.json({ ok: true });
+});
+router2.delete("/:id/save", requireAuth, async (req, res) => {
+  const postId = Number(req.params.id);
+  await db.delete(saves).where(and2(eq3(saves.userId, req.userId), eq3(saves.postId, postId)));
+  res.json({ ok: true });
+});
+router2.get("/me/saved", requireAuth, async (req, res) => {
+  const rows = await db.select({
+    id: posts.id,
+    caption: posts.caption,
+    createdAt: posts.createdAt,
+    userId: posts.userId,
+    username: users.username,
+    avatarUrl: users.avatarUrl,
+    isVerified: users.isVerified,
+    likeCount: sql3`(SELECT COUNT(*)::int FROM likes WHERE post_id = ${posts.id})`,
+    commentCount: sql3`(SELECT COUNT(*)::int FROM comments WHERE post_id = ${posts.id})`
+  }).from(saves).innerJoin(posts, eq3(posts.id, saves.postId)).innerJoin(users, eq3(users.id, posts.userId)).where(eq3(saves.userId, req.userId)).orderBy(desc2(saves.createdAt)).limit(60);
+  res.json(await hydratePosts(rows, req.userId));
+});
+router2.get("/:id/likes", async (req, res) => {
+  const id = Number(req.params.id);
+  const rows = await db.select({
+    id: users.id,
+    username: users.username,
+    fullName: users.fullName,
+    avatarUrl: users.avatarUrl
+  }).from(likes).innerJoin(users, eq3(users.id, likes.userId)).where(eq3(likes.postId, id)).limit(100);
+  res.json(rows);
+});
+router2.get("/:id/comments", async (req, res) => {
+  const id = Number(req.params.id);
+  const rows = await db.select({
+    id: comments.id,
+    text: comments.text,
+    createdAt: comments.createdAt,
+    parentId: comments.parentId,
+    userId: comments.userId,
+    username: users.username,
+    avatarUrl: users.avatarUrl
+  }).from(comments).innerJoin(users, eq3(users.id, comments.userId)).where(eq3(comments.postId, id)).orderBy(comments.createdAt).limit(200);
+  res.json(rows);
+});
+router2.post("/:id/comments", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const { text: text2, parentId } = req.body;
+  if (!text2 || !String(text2).trim()) return res.status(400).json({ error: "Text required" });
+  const [c] = await db.insert(comments).values({
+    postId: id,
+    userId: req.userId,
+    text: String(text2).slice(0, 1e3),
+    parentId: parentId ? Number(parentId) : null
+  }).returning();
+  const [p] = await db.select({ userId: posts.userId }).from(posts).where(eq3(posts.id, id));
+  if (p && p.userId !== req.userId) {
+    await db.insert(notifications).values({
+      userId: p.userId,
+      actorId: req.userId,
+      type: "comment",
+      postId: id,
+      commentId: c.id,
+      text: String(text2).slice(0, 200)
+    });
+  }
+  res.json(c);
+});
+router2.delete("/comments/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const [c] = await db.select().from(comments).where(eq3(comments.id, id));
+  if (!c) return res.status(404).json({ error: "Not found" });
+  if (c.userId !== req.userId) return res.status(403).json({ error: "Forbidden" });
+  await db.delete(comments).where(eq3(comments.id, id));
+  res.json({ ok: true });
+});
+var posts_default = router2;
+
+// server/routes/stories.ts
+import { Router as Router3 } from "express";
+import { desc as desc3, eq as eq4, sql as sql4, and as and3, or as or3, gt } from "drizzle-orm";
+var router3 = Router3();
+router3.get("/tray", async (req, res) => {
+  const me = req.userId || 0;
+  const rows = await db.select({
+    userId: stories.userId,
+    username: users.username,
+    avatarUrl: users.avatarUrl,
+    latestAt: sql4`MAX(${stories.createdAt})`,
+    hasUnseen: sql4`BOOL_OR(${stories.id} NOT IN (SELECT story_id FROM story_views WHERE user_id = ${me}))`
+  }).from(stories).innerJoin(users, eq4(users.id, stories.userId)).where(
+    and3(
+      gt(stories.expiresAt, sql4`NOW()`),
+      me ? or3(
+        eq4(stories.userId, me),
+        sql4`${stories.userId} IN (SELECT following_id FROM follows WHERE follower_id = ${me})`
+      ) : sql4`TRUE`
+    )
+  ).groupBy(stories.userId, users.username, users.avatarUrl).orderBy(desc3(sql4`MAX(${stories.createdAt})`));
+  res.json(rows);
+});
+router3.get("/user/:userId", async (req, res) => {
+  const userId = Number(req.params.userId);
+  const rows = await db.select().from(stories).where(and3(eq4(stories.userId, userId), gt(stories.expiresAt, sql4`NOW()`))).orderBy(stories.createdAt);
+  res.json(rows);
+});
+router3.post("/", requireAuth, async (req, res) => {
+  const { mediaUrl, type = "image" } = req.body;
+  if (!mediaUrl) return res.status(400).json({ error: "mediaUrl required" });
+  const [s] = await db.insert(stories).values({ userId: req.userId, mediaUrl, type }).returning();
+  res.json(s);
+});
+router3.post("/:id/view", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  await db.insert(storyViews).values({ storyId: id, userId: req.userId }).onConflictDoNothing();
+  res.json({ ok: true });
+});
+router3.delete("/:id", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const [s] = await db.select().from(stories).where(eq4(stories.id, id));
+  if (!s || s.userId !== req.userId) return res.status(403).json({ error: "Forbidden" });
+  await db.delete(stories).where(eq4(stories.id, id));
+  res.json({ ok: true });
+});
+var stories_default = router3;
+
+// server/routes/notifications.ts
+import { Router as Router4 } from "express";
+import { desc as desc4, eq as eq5 } from "drizzle-orm";
+var router4 = Router4();
+router4.get("/", requireAuth, async (req, res) => {
+  const rows = await db.select({
+    id: notifications.id,
+    type: notifications.type,
+    text: notifications.text,
+    postId: notifications.postId,
+    isRead: notifications.isRead,
+    createdAt: notifications.createdAt,
+    actorId: users.id,
+    actorUsername: users.username,
+    actorAvatar: users.avatarUrl
+  }).from(notifications).innerJoin(users, eq5(users.id, notifications.actorId)).where(eq5(notifications.userId, req.userId)).orderBy(desc4(notifications.createdAt)).limit(50);
+  res.json(rows);
+});
+router4.post("/read", requireAuth, async (req, res) => {
+  await db.update(notifications).set({ isRead: true }).where(eq5(notifications.userId, req.userId));
+  res.json({ ok: true });
+});
+var notifications_default = router4;
+
+// server/routes/messages.ts
+import { Router as Router5 } from "express";
+import { and as and4, desc as desc5, eq as eq6, inArray as inArray2, sql as sql5 } from "drizzle-orm";
+var router5 = Router5();
+router5.get("/conversations", requireAuth, async (req, res) => {
+  const me = req.userId;
+  const myConvs = await db.select({ conversationId: conversationMembers.conversationId }).from(conversationMembers).where(eq6(conversationMembers.userId, me));
+  const ids = myConvs.map((c) => c.conversationId);
+  if (!ids.length) return res.json([]);
+  const convs = await db.select().from(conversations).where(inArray2(conversations.id, ids)).orderBy(desc5(conversations.lastMessageAt));
+  const allMembers = await db.select({
+    conversationId: conversationMembers.conversationId,
+    userId: users.id,
+    username: users.username,
+    avatarUrl: users.avatarUrl,
+    fullName: users.fullName
+  }).from(conversationMembers).innerJoin(users, eq6(users.id, conversationMembers.userId)).where(inArray2(conversationMembers.conversationId, ids));
+  const lastMessages = await db.execute(sql5`
+    SELECT DISTINCT ON (conversation_id) conversation_id, sender_id, text, media_url, created_at
+    FROM messages
+    WHERE conversation_id = ANY(${ids})
+    ORDER BY conversation_id, created_at DESC
+  `);
+  const lastMap = /* @__PURE__ */ new Map();
+  for (const r of lastMessages.rows) {
+    lastMap.set(r.conversation_id, r);
+  }
+  res.json(
+    convs.map((c) => ({
+      ...c,
+      members: allMembers.filter((m) => m.conversationId === c.id && m.userId !== me),
+      lastMessage: lastMap.get(c.id) || null
+    }))
+  );
+});
+router5.post("/conversations", requireAuth, async (req, res) => {
+  const me = req.userId;
+  const otherId = Number(req.body.userId);
+  if (!otherId || otherId === me) return res.status(400).json({ error: "Bad userId" });
+  const existing = await db.execute(sql5`
+    SELECT cm1.conversation_id FROM conversation_members cm1
+    INNER JOIN conversation_members cm2 ON cm1.conversation_id = cm2.conversation_id
+    WHERE cm1.user_id = ${me} AND cm2.user_id = ${otherId}
+    GROUP BY cm1.conversation_id
+    HAVING COUNT(*) = 1
+    LIMIT 1
+  `);
+  if (existing.rows.length) {
+    const [c] = await db.select().from(conversations).where(eq6(conversations.id, existing.rows[0].conversation_id));
+    return res.json(c);
+  }
+  const [conv] = await db.insert(conversations).values({}).returning();
+  await db.insert(conversationMembers).values([
+    { conversationId: conv.id, userId: me },
+    { conversationId: conv.id, userId: otherId }
+  ]);
+  res.json(conv);
+});
+router5.get("/conversations/:id/messages", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const me = req.userId;
+  const [member] = await db.select().from(conversationMembers).where(
+    and4(eq6(conversationMembers.conversationId, id), eq6(conversationMembers.userId, me))
+  );
+  if (!member) return res.status(403).json({ error: "Forbidden" });
+  const rows = await db.select({
+    id: messages.id,
+    text: messages.text,
+    mediaUrl: messages.mediaUrl,
+    createdAt: messages.createdAt,
+    senderId: messages.senderId,
+    senderUsername: users.username,
+    senderAvatar: users.avatarUrl
+  }).from(messages).innerJoin(users, eq6(users.id, messages.senderId)).where(eq6(messages.conversationId, id)).orderBy(messages.createdAt).limit(200);
+  res.json(rows);
+});
+router5.post("/conversations/:id/messages", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const me = req.userId;
+  const { text: text2 = "", mediaUrl = "" } = req.body;
+  if (!text2.trim() && !mediaUrl) return res.status(400).json({ error: "Empty" });
+  const [member] = await db.select().from(conversationMembers).where(
+    and4(eq6(conversationMembers.conversationId, id), eq6(conversationMembers.userId, me))
+  );
+  if (!member) return res.status(403).json({ error: "Forbidden" });
+  const [m] = await db.insert(messages).values({
+    conversationId: id,
+    senderId: me,
+    text: String(text2).slice(0, 2e3),
+    mediaUrl: String(mediaUrl).slice(0, 1e3)
+  }).returning();
+  await db.update(conversations).set({ lastMessageAt: /* @__PURE__ */ new Date() }).where(eq6(conversations.id, id));
+  res.json(m);
+});
+var messages_default = router5;
+
+// server/routes/upload.ts
+import { Router as Router6 } from "express";
+import multer from "multer";
+
+// server/cloudinary.ts
+import { v2 as cloudinary } from "cloudinary";
+var configured = false;
+function configure() {
+  if (configured) return;
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+    secure: true
+  });
+  configured = true;
+}
+function getCloudinaryConfig() {
+  return {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
+    uploadPreset: process.env.CLOUDINARY_UPLOAD_PRESET || "",
+    apiKey: process.env.CLOUDINARY_API_KEY || ""
+  };
+}
+function signUploadParams(params) {
+  configure();
+  if (!process.env.CLOUDINARY_API_SECRET) {
+    throw new Error("Cloudinary is not configured");
+  }
+  const timestamp2 = Math.floor(Date.now() / 1e3);
+  const toSign = { timestamp: timestamp2, ...params };
+  const signature = cloudinary.utils.api_sign_request(
+    toSign,
+    process.env.CLOUDINARY_API_SECRET
+  );
+  return {
+    signature,
+    timestamp: timestamp2,
+    apiKey: process.env.CLOUDINARY_API_KEY,
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME
+  };
+}
+async function uploadBuffer(buffer, folder = "instaclone") {
+  configure();
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder, resource_type: "auto" },
+      (err, result) => {
+        if (err || !result) return reject(err);
+        resolve({
+          url: result.secure_url,
+          type: result.resource_type === "video" ? "video" : "image",
+          publicId: result.public_id
+        });
+      }
+    );
+    stream.end(buffer);
+  });
+}
+function isCloudinaryReady() {
+  return Boolean(
+    process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET
+  );
+}
+
+// server/routes/upload.ts
+var router6 = Router6();
+var upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+router6.get("/config", (_req, res) => {
+  res.json({ ...getCloudinaryConfig(), ready: isCloudinaryReady() });
+});
+router6.post("/sign", requireAuth, (req, res) => {
+  if (!isCloudinaryReady())
+    return res.status(503).json({ error: "Cloudinary not configured" });
+  const { folder = "instaclone" } = req.body || {};
+  try {
+    const result = signUploadParams({ folder });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+router6.post("/", requireAuth, upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file" });
+  if (isCloudinaryReady()) {
+    try {
+      const result = await uploadBuffer(req.file.buffer);
+      return res.json(result);
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+  const b64 = req.file.buffer.toString("base64");
+  const url = `data:${req.file.mimetype};base64,${b64}`;
+  res.json({ url, type: req.file.mimetype.startsWith("video") ? "video" : "image" });
+});
+var upload_default = router6;
+
+// server/routes/config.ts
+import { Router as Router7 } from "express";
+var router7 = Router7();
+router7.get("/", (_req, res) => {
+  res.json({
+    firebase: {
+      apiKey: process.env.VITE_FIREBASE_API_KEY || "",
+      authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || (process.env.VITE_FIREBASE_PROJECT_ID ? `${process.env.VITE_FIREBASE_PROJECT_ID}.firebaseapp.com` : ""),
+      projectId: process.env.VITE_FIREBASE_PROJECT_ID || "",
+      appId: process.env.VITE_FIREBASE_APP_ID || "",
+      storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || (process.env.VITE_FIREBASE_PROJECT_ID ? `${process.env.VITE_FIREBASE_PROJECT_ID}.appspot.com` : ""),
+      messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+      configured: Boolean(
+        process.env.VITE_FIREBASE_API_KEY && process.env.VITE_FIREBASE_PROJECT_ID
+      )
+    },
+    cloudinary: {
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
+      uploadPreset: process.env.CLOUDINARY_UPLOAD_PRESET || "",
+      configured: Boolean(
+        process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET
+      )
+    }
+  });
+});
+var config_default = router7;
+
+// server/index.ts
+var __filename = fileURLToPath(import.meta.url);
+var __dirname = path.dirname(__filename);
+var app = express();
+app.use(express.json({ limit: "30mb" }));
+app.use(express.urlencoded({ extended: true, limit: "30mb" }));
+app.use(authMiddleware);
+app.use("/api/config", config_default);
+app.use("/api/users", users_default);
+app.use("/api/posts", posts_default);
+app.use("/api/stories", stories_default);
+app.use("/api/notifications", notifications_default);
+app.use("/api/messages", messages_default);
+app.use("/api/upload", upload_default);
+app.use((err, _req, res, _next) => {
+  console.error("API error:", err);
+  res.status(500).json({ error: err.message || "Server error" });
+});
+var PORT = Number(process.env.PORT || 5e3);
+async function start() {
+  if (process.env.NODE_ENV === "production") {
+    const distPath = path.resolve(__dirname, "public");
+    app.use(express.static(distPath));
+    app.get("*", (_req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  } else {
+    const { createServer: createViteServer } = await import("vite");
+    const vite = await createViteServer({
+      root: path.resolve(process.cwd(), "client"),
+      server: { middlewareMode: true, host: "0.0.0.0", allowedHosts: true, hmr: { server: void 0 } },
+      appType: "spa"
+    });
+    app.use(vite.middlewares);
+  }
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[server] listening on http://0.0.0.0:${PORT}`);
+  });
+}
+start().catch((e) => {
+  console.error("Fatal startup error:", e);
+  process.exit(1);
+});
