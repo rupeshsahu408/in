@@ -2,6 +2,7 @@ import { useParams, Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Avatar } from "../components/Common/Avatar";
+import { VerifiedBadge } from "../components/VerifiedBadge";
 import { ArrowLeft } from "lucide-react";
 
 interface U {
@@ -68,7 +69,7 @@ export default function FollowList({ kind }: { kind: "followers" | "following" }
             >
               <Avatar src={u.avatarUrl} size={44} />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold truncate">{u.username}</div>
+                <div className="text-sm font-semibold flex items-center gap-1">{u.username}<VerifiedBadge size={13} /></div>
                 <div className="text-sm text-ig-subtle truncate">{u.fullName}</div>
               </div>
             </Link>

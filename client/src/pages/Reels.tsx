@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Heart, MessageCircle, Send, MoreHorizontal, Music2, Volume2, VolumeX } from "lucide-react";
 import { Avatar } from "../components/Common/Avatar";
+import { VerifiedBadge } from "../components/VerifiedBadge";
 import { Link } from "wouter";
 import { formatCount } from "../lib/utils";
 import { useRef, useState } from "react";
@@ -126,7 +127,7 @@ function ReelItem({ post }: { post: Item }) {
         <div className="absolute left-3 right-16 bottom-8 text-white">
           <Link href={`/u/${post.username}`} className="flex items-center gap-2 mb-2 pressable">
             <Avatar src={post.avatarUrl} size={32} />
-            <span className="text-sm font-semibold drop-shadow">{post.username}</span>
+            <span className="text-sm font-semibold drop-shadow flex items-center gap-1">{post.username}<VerifiedBadge size={14} /></span>
             <span className="border border-white/70 rounded-lg px-2 py-0.5 text-xs font-semibold hover:bg-white/10 transition-colors">
               Follow
             </span>

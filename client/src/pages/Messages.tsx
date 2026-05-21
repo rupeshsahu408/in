@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams, useLocation } from "wouter";
 import { api } from "../lib/api";
 import { Avatar } from "../components/Common/Avatar";
+import { VerifiedBadge } from "../components/VerifiedBadge";
 import { useAuth } from "../hooks/useAuth";
 import { useEffect, useRef, useState } from "react";
 import { Send, Smile, ImagePlus, Edit, ArrowLeft } from "lucide-react";
@@ -85,7 +86,7 @@ export default function Messages() {
                 >
                   <Avatar src={other?.avatarUrl} size={56} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold">{other?.username || "User"}</div>
+                    <div className="text-sm font-semibold flex items-center gap-1">{other?.username || "User"}{other && <VerifiedBadge size={13} />}</div>
                     <div className="text-xs text-ig-subtle truncate mt-0.5">
                       {c.lastMessage
                         ? `${c.lastMessage.text || "Sent a photo"} · ${timeAgo(c.lastMessage.created_at)}`
@@ -184,7 +185,7 @@ function Thread({ id }: { id: number }) {
         {other ? (
           <Link href={`/u/${other.username}`} className="flex items-center gap-3 pressable">
             <Avatar src={other.avatarUrl} size={32} />
-            <span className="font-semibold text-sm">{other.username}</span>
+            <span className="font-semibold text-sm flex items-center gap-1">{other.username}<VerifiedBadge size={14} /></span>
           </Link>
         ) : (
           <span className="font-semibold text-sm">Conversation</span>

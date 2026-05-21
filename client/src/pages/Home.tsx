@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { PostCard, type FeedPost } from "../components/Posts/PostCard";
 import { StoryTray } from "../components/Stories/StoryTray";
 import { Avatar } from "../components/Common/Avatar";
+import { VerifiedBadge } from "../components/VerifiedBadge";
 import { useAuth } from "../hooks/useAuth";
 import { Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -90,8 +91,9 @@ export default function Home() {
               <Avatar src={user.avatarUrl} size={56} />
             </Link>
             <div className="flex-1 min-w-0">
-              <Link href={`/u/${user.username}`} className="font-semibold text-sm block truncate hover:opacity-70 transition-opacity">
+              <Link href={`/u/${user.username}`} className="font-semibold text-sm flex items-center gap-1 hover:opacity-70 transition-opacity">
                 {user.username}
+                <VerifiedBadge size={13} />
               </Link>
               <span className="text-sm text-ig-subtle truncate block">{user.fullName}</span>
             </div>
@@ -131,8 +133,9 @@ function SuggestRow({ user }: { user: Suggested }) {
         <Avatar src={user.avatarUrl} size={44} />
       </Link>
       <div className="flex-1 min-w-0">
-        <Link href={`/u/${user.username}`} className="font-semibold text-sm truncate block hover:opacity-70 transition-opacity">
+        <Link href={`/u/${user.username}`} className="font-semibold text-sm flex items-center gap-1 hover:opacity-70 transition-opacity">
           {user.username}
+          <VerifiedBadge size={13} />
         </Link>
         <span className="text-xs text-ig-subtle truncate block">{user.fullName || "Suggested for you"}</span>
       </div>

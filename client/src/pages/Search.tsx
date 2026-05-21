@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Search as SearchIcon, X } from "lucide-react";
 import { api } from "../lib/api";
 import { Avatar } from "../components/Common/Avatar";
+import { VerifiedBadge } from "../components/VerifiedBadge";
 
 interface SUser {
   id: number;
@@ -97,12 +98,7 @@ export default function Search() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold truncate flex items-center gap-1">
                   {u.username}
-                  {u.isVerified && (
-                    <svg className="w-3.5 h-3.5 fill-ig-primary shrink-0" viewBox="0 0 40 40">
-                      <path d="M19.998 3.094L14.22 7.212l-7.853-.05-2.469 7.019L.244 19.999l3.654 5.816-2.47 7.02 7.854-.05 5.78 4.118 5.778-4.118 7.854.05 2.469-7.02 3.654-5.816-3.654-5.818 2.469-7.018-7.854.05z" />
-                      <path fill="#fff" d="M16.652 28.522l-6.79-6.792 3.293-3.293 3.497 3.498 8.045-8.046 3.293 3.293z" />
-                    </svg>
-                  )}
+                  <VerifiedBadge size={14} />
                 </div>
                 <div className="text-sm text-ig-subtle truncate">{u.fullName}</div>
               </div>

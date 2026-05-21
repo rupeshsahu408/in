@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { PostCard, type FeedPost } from "../components/Posts/PostCard";
 import { Avatar } from "../components/Common/Avatar";
+import { VerifiedBadge } from "../components/VerifiedBadge";
 import { useEffect, useState } from "react";
 import { Heart, MessageCircle, Send, Bookmark, Smile, MoreHorizontal, ArrowLeft } from "lucide-react";
 import { timeAgo, formatCount, cn } from "../lib/utils";
@@ -150,8 +151,9 @@ export default function PostPage() {
           <div className="flex items-center justify-between border-b border-neutral-800 p-3">
             <Link href={`/u/${post.username}`} className="flex items-center gap-3 group">
               <Avatar src={post.avatarUrl} size={32} />
-              <span className="text-sm font-semibold group-hover:opacity-70 transition-opacity">
+              <span className="text-sm font-semibold flex items-center gap-1 group-hover:opacity-70 transition-opacity">
                 {post.username}
+                <VerifiedBadge size={14} />
               </span>
             </Link>
             <button className="icon-btn p-1 hover:opacity-60">
@@ -165,7 +167,7 @@ export default function PostPage() {
               <div className="flex gap-3 items-start">
                 <Avatar src={post.avatarUrl} size={32} />
                 <div>
-                  <span className="font-semibold mr-2 text-sm">{post.username}</span>
+                  <span className="font-semibold mr-1 text-sm inline-flex items-center gap-1">{post.username}<VerifiedBadge size={13} /></span>{" "}
                   <span className="text-sm">{post.caption}</span>
                   <div className="text-xs text-ig-subtle mt-1">{timeAgo(post.createdAt)}</div>
                 </div>
@@ -178,9 +180,9 @@ export default function PostPage() {
                 </Link>
                 <div className="flex-1">
                   <div className="text-sm">
-                    <Link href={`/u/${c.username}`} className="font-semibold mr-2 hover:opacity-70 transition-opacity">
-                      {c.username}
-                    </Link>
+                    <Link href={`/u/${c.username}`} className="font-semibold mr-1 hover:opacity-70 transition-opacity inline-flex items-center gap-1">
+                      {c.username}<VerifiedBadge size={13} />
+                    </Link>{" "}
                     {c.text}
                   </div>
                   <div className="text-xs text-ig-subtle mt-1">

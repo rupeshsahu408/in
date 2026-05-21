@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { VerifiedBadge } from "../VerifiedBadge";
 import { Link } from "wouter";
 import {
   Heart,
@@ -104,12 +105,7 @@ export function PostCard({ post }: { post: FeedPost }) {
           <div className="flex flex-col leading-tight">
             <span className="text-sm font-semibold flex items-center gap-1 group-hover:opacity-70 transition-opacity">
               {post.username}
-              {post.isVerified && (
-                <svg className="w-3.5 h-3.5 fill-ig-primary" viewBox="0 0 40 40">
-                  <path d="M19.998 3.094L14.22 7.212l-7.853-.05-2.469 7.019L.244 19.999l3.654 5.816-2.47 7.02 7.854-.05 5.78 4.118 5.778-4.118 7.854.05 2.469-7.02 3.654-5.816-3.654-5.818 2.469-7.018-7.854.05z" />
-                  <path fill="#fff" d="M16.652 28.522l-6.79-6.792 3.293-3.293 3.497 3.498 8.045-8.046 3.293 3.293z" />
-                </svg>
-              )}
+              <VerifiedBadge size={14} />
             </span>
             {post.location && (
               <span className="text-xs text-ig-subtle">{post.location}</span>

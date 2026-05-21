@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { api } from "../lib/api";
 import { Avatar } from "../components/Common/Avatar";
+import { VerifiedBadge } from "../components/VerifiedBadge";
 import { signOut } from "../lib/firebase";
 import { useLocation } from "wouter";
 import { Check } from "lucide-react";
@@ -79,7 +80,7 @@ export default function Settings() {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold truncate">{username}</div>
+          <div className="font-semibold flex items-center gap-1">{username}<VerifiedBadge size={14} /></div>
           <div className="text-sm text-ig-subtle truncate">{fullName}</div>
         </div>
         <label className="bg-ig-primary hover:bg-ig-primaryHover active:brightness-90 transition-all rounded-lg text-sm font-semibold px-3 py-1.5 cursor-pointer pressable">

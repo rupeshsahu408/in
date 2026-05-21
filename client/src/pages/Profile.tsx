@@ -2,6 +2,7 @@ import { useParams, Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Avatar } from "../components/Common/Avatar";
+import { VerifiedBadge } from "../components/VerifiedBadge";
 import { useState } from "react";
 import { Grid3x3, Bookmark, Tag, Settings, Heart, MessageCircle, ArrowLeft } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
@@ -109,7 +110,7 @@ export default function Profile() {
         >
           <ArrowLeft size={20} />
         </button>
-        <span className="font-semibold text-base">{profile.username}</span>
+        <span className="font-semibold text-base flex items-center gap-1.5">{profile.username}<VerifiedBadge size={15} /></span>
         {profile.isMe && (
           <Link href="/settings" className="ml-auto icon-btn p-1.5 rounded-full hover:bg-neutral-900">
             <Settings size={20} />
@@ -131,7 +132,7 @@ export default function Profile() {
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-3">
-            <span className="text-xl md:text-2xl font-light">{profile.username}</span>
+            <span className="text-xl md:text-2xl font-light flex items-center gap-2">{profile.username}<VerifiedBadge size={18} /></span>
             <div className="flex gap-2 items-center flex-wrap">
               {profile.isMe ? (
                 <>

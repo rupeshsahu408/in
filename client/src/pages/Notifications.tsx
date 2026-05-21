@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Avatar } from "../components/Common/Avatar";
+import { VerifiedBadge } from "../components/VerifiedBadge";
 import { Link } from "wouter";
 import { timeAgo } from "../lib/utils";
 import { useEffect } from "react";
@@ -79,7 +80,7 @@ export default function Notifications() {
                 )}
               </div>
               <div className="flex-1 text-sm min-w-0">
-                <span className="font-semibold">{n.actorUsername}</span>{" "}
+                <span className="font-semibold inline-flex items-center gap-1">{n.actorUsername}<VerifiedBadge size={13} /></span>{" "}
                 <span className="text-ig-subtle">{renderText(n)}</span>
                 <div className="text-xs text-ig-subtle mt-0.5">{timeAgo(n.createdAt)}</div>
               </div>
