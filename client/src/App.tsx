@@ -1,29 +1,34 @@
-import { Switch, Route, useLocation } from "wouter";
-import { useEffect, lazy, Suspense } from "react";
+import { Switch, Route, useLocation, Redirect } from "wouter";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { AppShell } from "./components/Layout/AppShell";
 import { useAuth } from "./hooks/useAuth";
 
-const Login        = lazy(() => import("./pages/Login"));
-const Home         = lazy(() => import("./pages/Home"));
-const Profile      = lazy(() => import("./pages/Profile"));
-const Explore      = lazy(() => import("./pages/Explore"));
-const Search       = lazy(() => import("./pages/Search"));
-const Reels        = lazy(() => import("./pages/Reels"));
-const Notifications= lazy(() => import("./pages/Notifications"));
-const Messages     = lazy(() => import("./pages/Messages"));
-const PostPage     = lazy(() => import("./pages/Post"));
-const Settings     = lazy(() => import("./pages/Settings"));
-const FollowList   = lazy(() => import("./pages/FollowList"));
+const Landing       = lazy(() => import("./pages/Landing"));
+const Login         = lazy(() => import("./pages/Login"));
+const Home          = lazy(() => import("./pages/Home"));
+const Profile       = lazy(() => import("./pages/Profile"));
+const Explore       = lazy(() => import("./pages/Explore"));
+const Search        = lazy(() => import("./pages/Search"));
+const Reels         = lazy(() => import("./pages/Reels"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const Messages      = lazy(() => import("./pages/Messages"));
+const PostPage      = lazy(() => import("./pages/Post"));
+const Settings      = lazy(() => import("./pages/Settings"));
+const FollowList    = lazy(() => import("./pages/FollowList"));
 
+/* Full-screen loader shown while Firebase restores session */
 function Loader() {
   return (
-    <div className="flex items-center justify-center h-screen bg-black">
-      <div className="spinner" />
+    <div className="flex items-center justify-center h-screen bg-white">
+      <div
+        className="w-6 h-6 rounded-full border-2 border-gray-200 border-t-gray-700"
+        style={{ animation: "spin 0.7s linear infinite" }}
+      />
     </div>
   );
 }
 
-/* Scroll to top whenever the route changes */
+/* Scrolls to top on every route change */
 function ScrollReset() {
   const [location] = useLocation();
   useEffect(() => {
@@ -32,7 +37,7 @@ function ScrollReset() {
   return null;
 }
 
-/* Wrap page content so it fades in on every navigation */
+/* Fade-in wrapper keyed to the route */
 function PageWrapper({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   return (
@@ -42,7 +47,69 @@ function PageWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ProtectedShell({ children }: { children: React.ReactNode }) {
+/* Pages that live inside the main AppShell */
+function ShellPage({ children }: { children: React.ReactNode }) {
+  return (
+    <AppShell>
+      <PageWrapper>{children}</PageWrapper>
+    </AppShell>
+  );
+}
+
+/*
+ * Smart root route:
+ *   • loading + had prior session  → brief white spinner (Firebase restoring)
+ *   • loading + no prior session   → show landing immediately (new / guest)
+ *   • logged in                    → main feed  (also stamps "ig_session=1")
+ *   • logged out                   → landing page
+ *
+ * We use a tiny localStorage flag "ig_session" so returning users get the
+ * spinner instead of a flash of the landing page before the redirect fires.
+ */
+function RootRoute() {
+  const { user, loading } = useAuth();
+
+  // Read once at mount — did this browser have a session before?
+  const [prevLoggedIn] = useState(() => localStorage.getItem("ig_session") === "1");
+
+  useEffect(() => {
+    if (!loading) {
+      if (user) {
+        localStorage.setItem("ig_session", "1");
+      } else {
+        localStorage.removeItem("ig_session");
+      }
+    }
+  }, [user, loading]);
+
+  if (loading) {
+    // Returning logged-in user → show spinner while Firebase restores token
+    if (prevLoggedIn) return <Loader />;
+    // New / guest visitor → show landing immediately, no wait
+    return <Landing />;
+  }
+
+  if (user) {
+    return (
+      <ShellPage>
+        <Home />
+      </ShellPage>
+    );
+  }
+
+  return <Landing />;
+}
+
+/* Redirects logged-in users away from /login back to feed */
+function LoginRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <Loader />;
+  if (user) return <Redirect to="/" />;
+  return <Login />;
+}
+
+/* Ensures unauthenticated users can't access protected pages */
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const [, navigate] = useLocation();
   useEffect(() => {
@@ -50,11 +117,7 @@ function ProtectedShell({ children }: { children: React.ReactNode }) {
   }, [user, loading, navigate]);
   if (loading) return <Loader />;
   if (!user) return <Loader />;
-  return <AppShell><PageWrapper>{children}</PageWrapper></AppShell>;
-}
-
-function PublicShell({ children }: { children: React.ReactNode }) {
-  return <AppShell><PageWrapper>{children}</PageWrapper></AppShell>;
+  return <ShellPage>{children}</ShellPage>;
 }
 
 export default function App() {
@@ -63,52 +126,57 @@ export default function App() {
       <ScrollReset />
       <Suspense fallback={<Loader />}>
         <Switch>
-          <Route path="/login">
-            <Login />
-          </Route>
+          {/* Root — smart: Landing for guests, Home for logged-in users */}
+          <Route path="/" component={RootRoute} />
+
+          {/* Auth */}
+          <Route path="/login" component={LoginRoute} />
+
+          {/* Public pages */}
           <Route path="/u/:username/followers">
-            {() => <PublicShell><FollowList kind="followers" /></PublicShell>}
+            {() => <ShellPage><FollowList kind="followers" /></ShellPage>}
           </Route>
           <Route path="/u/:username/following">
-            {() => <PublicShell><FollowList kind="following" /></PublicShell>}
+            {() => <ShellPage><FollowList kind="following" /></ShellPage>}
           </Route>
           <Route path="/u/:username">
-            {() => <PublicShell><Profile /></PublicShell>}
+            {() => <ShellPage><Profile /></ShellPage>}
           </Route>
           <Route path="/p/:id">
-            {() => <PublicShell><PostPage /></PublicShell>}
+            {() => <ShellPage><PostPage /></ShellPage>}
           </Route>
           <Route path="/explore">
-            {() => <PublicShell><Explore /></PublicShell>}
+            {() => <ShellPage><Explore /></ShellPage>}
           </Route>
           <Route path="/search">
-            {() => <PublicShell><Search /></PublicShell>}
+            {() => <ShellPage><Search /></ShellPage>}
           </Route>
           <Route path="/reels">
-            {() => <PublicShell><Reels /></PublicShell>}
+            {() => <ShellPage><Reels /></ShellPage>}
           </Route>
+
+          {/* Protected pages */}
           <Route path="/notifications">
-            {() => <ProtectedShell><Notifications /></ProtectedShell>}
+            {() => <ProtectedRoute><Notifications /></ProtectedRoute>}
           </Route>
           <Route path="/messages/:id">
-            {() => <ProtectedShell><Messages /></ProtectedShell>}
+            {() => <ProtectedRoute><Messages /></ProtectedRoute>}
           </Route>
           <Route path="/messages">
-            {() => <ProtectedShell><Messages /></ProtectedShell>}
+            {() => <ProtectedRoute><Messages /></ProtectedRoute>}
           </Route>
           <Route path="/settings">
-            {() => <ProtectedShell><Settings /></ProtectedShell>}
+            {() => <ProtectedRoute><Settings /></ProtectedRoute>}
           </Route>
           <Route path="/settings/edit">
-            {() => <ProtectedShell><Settings /></ProtectedShell>}
+            {() => <ProtectedRoute><Settings /></ProtectedRoute>}
           </Route>
-          <Route path="/">
-            {() => <PublicShell><Home /></PublicShell>}
-          </Route>
+
+          {/* 404 */}
           <Route>
-            <PublicShell>
-              <div className="p-8 text-center text-ig-subtle">Page not found</div>
-            </PublicShell>
+            <ShellPage>
+              <div className="p-12 text-center text-ig-subtle">Page not found</div>
+            </ShellPage>
           </Route>
         </Switch>
       </Suspense>
