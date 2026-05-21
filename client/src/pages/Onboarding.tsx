@@ -35,6 +35,8 @@ function ProgressDots({ steps, current }: { steps: StepId[]; current: StepId }) 
   );
 }
 
+const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+
 export default function Onboarding() {
   const { user, loading, refresh } = useAuth();
   const [, navigate] = useLocation();
@@ -179,12 +181,14 @@ export default function Onboarding() {
     setUStatus("checking");
     checkRef.current = setTimeout(async () => {
       try {
-        const r = await fetch(`/api/users/check-username?u=${encodeURIComponent(clean)}`);
+        const r = await fetch(`${API_BASE}/api/users/check-username?u=${encodeURIComponent(clean)}`);
         const d = await r.json();
         setUStatus(d.available ? "ok" : "taken");
         setUMsg(d.available ? "" : "This username is already taken");
       } catch {
-        setUStatus("idle");
+        // Network failure — allow the user to continue; the server will re-validate on save
+        setUStatus("ok");
+        setUMsg("Could not verify username uniqueness — it will be checked on save.");
       }
     }, 500);
   };
@@ -212,7 +216,7 @@ export default function Onboarding() {
       const token = await getIdToken();
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/upload", {
+      const res = await fetch(`${API_BASE}/api/upload`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd,
