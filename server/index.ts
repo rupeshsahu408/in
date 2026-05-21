@@ -48,7 +48,7 @@ async function start() {
   if (process.env.NODE_ENV === "production") {
     const distPath = path.resolve(__dirname, "public");
     app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
+    app.get("/{*path}", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   } else {
