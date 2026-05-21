@@ -6,3 +6,5 @@ dist
 *.log
 .cache
 drizzle/meta
+attached_assets/*firebase-adminsdk*.json
+*-adminsdk-*.json
