@@ -57,8 +57,23 @@ const PORT = Number(process.env.PORT || 5000);
 async function start() {
   if (process.env.NODE_ENV === "production") {
     const distPath = path.resolve(__dirname, "public");
-    app.use(express.static(distPath));
+    // Static assets – long-lived cache (Vite adds content hashes to filenames)
+    app.use(
+      "/assets",
+      express.static(path.join(distPath, "assets"), {
+        maxAge: "1y",
+        immutable: true,
+      })
+    );
+    // Everything else in dist/public – no-cache so browsers always refetch index.html
+    app.use(express.static(distPath, { maxAge: 0, etag: false }));
+    // SPA fallback – all unknown routes serve index.html with no-cache headers
     app.get("/{*path}", (_req, res) => {
+      res.set({
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+      });
       res.sendFile(path.join(distPath, "index.html"));
     });
   } else {

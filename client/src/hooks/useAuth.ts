@@ -38,10 +38,16 @@ async function init() {
       return;
     }
     try {
-      const me: AppUser = await api("/api/users/sync", { method: "POST", body: {} });
+      // Race the backend sync against a 6-second timeout so we never hang
+      const me: AppUser = await Promise.race([
+        api("/api/users/sync", { method: "POST", body: {} }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("sync timeout")), 6000)
+        ),
+      ]);
       setUser(me);
     } catch (e) {
-      console.error("sync failed:", e);
+      console.warn("sync failed:", e);
       setUser(null);
     }
   });
@@ -59,20 +65,32 @@ export function useAuth() {
       qc.invalidateQueries();
     };
     listeners.push(cb);
-    init().then(() => setLoading(!initialized || (isFirebaseConfigured() && cachedUser === null)));
-    // If firebase is not configured, mark not loading
-    ensureFirebase().then(() => {
-      if (!isFirebaseConfigured()) setLoading(false);
+
+    init().then(() => {
+      // If Firebase isn't configured (or already resolved), clear loading now
+      if (!isFirebaseConfigured() || cachedUser !== null) {
+        setLoading(false);
+      }
+      // Otherwise loading stays true until onAuthStateChanged fires → cb is called
     });
+
+    // Hard safety-net: if auth hasn't resolved in 8 seconds, unblock the UI
+    const failsafe = setTimeout(() => setLoading(false), 8000);
+
     return () => {
       listeners = listeners.filter((l) => l !== cb);
+      clearTimeout(failsafe);
     };
   }, [qc]);
 
-  return { user, loading, refresh: async () => {
-    try {
-      const me = await api("/api/users/me");
-      setUser(me);
-    } catch {}
-  }};
+  return {
+    user,
+    loading,
+    refresh: async () => {
+      try {
+        const me = await api("/api/users/me");
+        setUser(me);
+      } catch {}
+    },
+  };
 }

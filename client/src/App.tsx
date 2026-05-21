@@ -100,11 +100,14 @@ function RootRoute() {
   return <Landing />;
 }
 
-/* Redirects logged-in users away from /login back to feed */
+/* Redirects logged-in users away from /login back to feed.
+ * We show the login form immediately (no spinner) so the user never
+ * stares at a blank screen. If auth resolves and there IS a logged-in
+ * user, the Redirect fires automatically. */
 function LoginRoute() {
   const { user, loading } = useAuth();
-  if (loading) return <Loader />;
-  if (user) return <Redirect to="/" />;
+  // Only redirect once we know for sure the user is authenticated
+  if (!loading && user) return <Redirect to="/" />;
   return <Login />;
 }
 
