@@ -85,3 +85,4 @@ yufI8f+CGxQH5gRlqVeRk6TTP4+AImHhsuKzOlYTx91ugw6VfGdiY+WVo4Q76zb/
 0akoWpIQjl9e7X1tcqN4qAEIwA==
 -----END PRIVATE KEY-----
 """
+SUPABASE_DATABASE_URL = "postgresql://postgres.dyveoelnlevspncqdgjo:Anjali%23%23890Kavi@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres"
