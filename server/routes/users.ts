@@ -13,7 +13,35 @@ import { verifyFirebaseToken } from "../firebase-admin";
 
 const router = Router();
 
-// Sync (login or register) Firebase user
+// Check username availability (public — used during onboarding)
+router.get("/check-username", async (req, res) => {
+  const raw = String(req.query.u || "").trim();
+  const u = raw.toLowerCase().replace(/[^a-z0-9._]/g, "");
+  if (u.length < 3) return res.json({ available: false, reason: "too_short", username: u });
+  if (u.length > 30) return res.json({ available: false, reason: "too_long", username: u });
+  if (!/^[a-z0-9]/.test(u)) return res.json({ available: false, reason: "invalid_start", username: u });
+  const [taken] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.username, u))
+    .limit(1);
+  res.json({ available: !taken, username: u });
+});
+
+// Resolve username → email for login (public — needed before auth)
+router.get("/email-by-username", async (req, res) => {
+  const username = String(req.query.username || "").toLowerCase().trim();
+  if (!username) return res.status(400).json({ error: "Missing username" });
+  const [u] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.username, username))
+    .limit(1);
+  if (!u) return res.status(404).json({ error: "No account found with that username" });
+  res.json({ email: u.email });
+});
+
+// Sync (login or register) Firebase user → always returns DB user
 router.post("/sync", async (req, res) => {
   const auth = req.headers.authorization || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
@@ -32,6 +60,7 @@ router.post("/sync", async (req, res) => {
     .limit(1);
   if (existing.length) return res.json(existing[0]);
 
+  // New user — auto-generate a temp username; onboarding will let them choose a real one
   const baseUsername =
     (decoded.name || decoded.email?.split("@")[0] || "user")
       .toLowerCase()
@@ -57,6 +86,7 @@ router.post("/sync", async (req, res) => {
       username,
       fullName: decoded.name || "",
       avatarUrl: decoded.picture || "",
+      onboardingComplete: false,
     })
     .returning();
   res.json(created);
@@ -68,9 +98,9 @@ router.get("/me", requireAuth, async (req: AuthedRequest, res) => {
   res.json(u);
 });
 
-// Update current user
+// Update current user profile
 router.patch("/me", requireAuth, async (req: AuthedRequest, res) => {
-  const { fullName, bio, website, gender, isPrivate, avatarUrl, username } = req.body;
+  const { fullName, bio, website, gender, isPrivate, avatarUrl, username, onboardingComplete } = req.body;
   const updates: any = {};
   if (fullName !== undefined) updates.fullName = String(fullName).slice(0, 80);
   if (bio !== undefined) updates.bio = String(bio).slice(0, 200);
@@ -78,6 +108,7 @@ router.patch("/me", requireAuth, async (req: AuthedRequest, res) => {
   if (gender !== undefined) updates.gender = String(gender).slice(0, 16);
   if (isPrivate !== undefined) updates.isPrivate = Boolean(isPrivate);
   if (avatarUrl !== undefined) updates.avatarUrl = String(avatarUrl);
+  if (onboardingComplete !== undefined) updates.onboardingComplete = Boolean(onboardingComplete);
   if (username !== undefined) {
     const u = String(username)
       .toLowerCase()
@@ -92,6 +123,7 @@ router.patch("/me", requireAuth, async (req: AuthedRequest, res) => {
     if (taken.length) return res.status(400).json({ error: "Username already taken" });
     updates.username = u;
   }
+  if (!Object.keys(updates).length) return res.json(await db.select().from(users).where(eq(users.id, req.userId!)).limit(1).then(r => r[0]));
   const [updated] = await db
     .update(users)
     .set(updates)
@@ -127,21 +159,12 @@ router.get("/profile/:username", async (req: AuthedRequest, res) => {
     const [f] = await db
       .select()
       .from(follows)
-      .where(
-        and(eq(follows.followerId, req.userId), eq(follows.followingId, user.id))
-      )
+      .where(and(eq(follows.followerId, req.userId), eq(follows.followingId, user.id)))
       .limit(1);
     isFollowing = Boolean(f);
   }
 
-  res.json({
-    ...user,
-    postCount,
-    followerCount,
-    followingCount,
-    isFollowing,
-    isMe: req.userId === user.id,
-  });
+  res.json({ ...user, postCount, followerCount, followingCount, isFollowing, isMe: req.userId === user.id });
 });
 
 // Posts of a user
@@ -177,13 +200,7 @@ router.post("/:id/follow", requireAuth, async (req: AuthedRequest, res) => {
     .insert(follows)
     .values({ followerId: req.userId!, followingId: targetId })
     .onConflictDoNothing();
-  await db
-    .insert(notifications)
-    .values({
-      userId: targetId,
-      actorId: req.userId!,
-      type: "follow",
-    });
+  await db.insert(notifications).values({ userId: targetId, actorId: req.userId!, type: "follow" });
   res.json({ ok: true });
 });
 
@@ -191,9 +208,7 @@ router.delete("/:id/follow", requireAuth, async (req: AuthedRequest, res) => {
   const targetId = Number(req.params.id);
   await db
     .delete(follows)
-    .where(
-      and(eq(follows.followerId, req.userId!), eq(follows.followingId, targetId))
-    );
+    .where(and(eq(follows.followerId, req.userId!), eq(follows.followingId, targetId)));
   res.json({ ok: true });
 });
 
@@ -202,56 +217,30 @@ router.get("/search", async (req, res) => {
   const q = String(req.query.q || "").trim();
   if (!q) return res.json([]);
   const rows = await db
-    .select({
-      id: users.id,
-      username: users.username,
-      fullName: users.fullName,
-      avatarUrl: users.avatarUrl,
-      isVerified: users.isVerified,
-    })
+    .select({ id: users.id, username: users.username, fullName: users.fullName, avatarUrl: users.avatarUrl, isVerified: users.isVerified })
     .from(users)
     .where(or(ilike(users.username, `%${q}%`), ilike(users.fullName, `%${q}%`)))
     .limit(20);
   res.json(rows);
 });
 
-// Suggested users (people you don't follow)
+// Suggested users
 router.get("/suggested", async (req: AuthedRequest, res) => {
   const me = req.userId || 0;
   const rows = await db
-    .select({
-      id: users.id,
-      username: users.username,
-      fullName: users.fullName,
-      avatarUrl: users.avatarUrl,
-      isVerified: users.isVerified,
-    })
+    .select({ id: users.id, username: users.username, fullName: users.fullName, avatarUrl: users.avatarUrl, isVerified: users.isVerified })
     .from(users)
-    .where(
-      and(
-        ne(users.id, me),
-        sql`${users.id} NOT IN (SELECT following_id FROM follows WHERE follower_id = ${me})`
-      )
-    )
+    .where(and(ne(users.id, me), sql`${users.id} NOT IN (SELECT following_id FROM follows WHERE follower_id = ${me})`))
     .limit(8);
   res.json(rows);
 });
 
 // Followers / Following lists
 router.get("/profile/:username/followers", async (req, res) => {
-  const [u] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.username, req.params.username))
-    .limit(1);
+  const [u] = await db.select({ id: users.id }).from(users).where(eq(users.username, req.params.username)).limit(1);
   if (!u) return res.json([]);
   const rows = await db
-    .select({
-      id: users.id,
-      username: users.username,
-      fullName: users.fullName,
-      avatarUrl: users.avatarUrl,
-    })
+    .select({ id: users.id, username: users.username, fullName: users.fullName, avatarUrl: users.avatarUrl })
     .from(follows)
     .innerJoin(users, eq(users.id, follows.followerId))
     .where(eq(follows.followingId, u.id))
@@ -260,19 +249,10 @@ router.get("/profile/:username/followers", async (req, res) => {
 });
 
 router.get("/profile/:username/following", async (req, res) => {
-  const [u] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.username, req.params.username))
-    .limit(1);
+  const [u] = await db.select({ id: users.id }).from(users).where(eq(users.username, req.params.username)).limit(1);
   if (!u) return res.json([]);
   const rows = await db
-    .select({
-      id: users.id,
-      username: users.username,
-      fullName: users.fullName,
-      avatarUrl: users.avatarUrl,
-    })
+    .select({ id: users.id, username: users.username, fullName: users.fullName, avatarUrl: users.avatarUrl })
     .from(follows)
     .innerJoin(users, eq(users.id, follows.followingId))
     .where(eq(follows.followerId, u.id))

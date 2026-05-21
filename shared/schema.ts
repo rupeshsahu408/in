@@ -28,6 +28,7 @@ export const users = pgTable(
     gender: varchar("gender", { length: 16 }).default(""),
     isPrivate: boolean("is_private").default(false).notNull(),
     isVerified: boolean("is_verified").default(false).notNull(),
+    onboardingComplete: boolean("onboarding_complete").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => ({

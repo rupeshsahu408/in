@@ -13,6 +13,7 @@ export interface AppUser {
   avatarUrl: string;
   isPrivate: boolean;
   isVerified: boolean;
+  onboardingComplete: boolean;
 }
 
 let cachedUser: AppUser | null = null;
@@ -38,7 +39,6 @@ async function init() {
       return;
     }
     try {
-      // Race the backend sync against a 6-second timeout so we never hang
       const me: AppUser = await Promise.race([
         api("/api/users/sync", { method: "POST", body: {} }),
         new Promise<never>((_, reject) =>
@@ -67,14 +67,11 @@ export function useAuth() {
     listeners.push(cb);
 
     init().then(() => {
-      // If Firebase isn't configured (or already resolved), clear loading now
       if (!isFirebaseConfigured() || cachedUser !== null) {
         setLoading(false);
       }
-      // Otherwise loading stays true until onAuthStateChanged fires → cb is called
     });
 
-    // Hard safety-net: if auth hasn't resolved in 8 seconds, unblock the UI
     const failsafe = setTimeout(() => setLoading(false), 8000);
 
     return () => {
