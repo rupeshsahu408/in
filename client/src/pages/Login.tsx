@@ -4,12 +4,13 @@ import {
   signInWithGoogle,
   signInWithEmail,
   signUpWithEmail,
+  resetPassword,
   ensureFirebase,
   isFirebaseConfigured,
 } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 
-type Mode = "in" | "up";
+type Mode = "in" | "up" | "reset";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -21,6 +22,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [configured, setConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -35,10 +37,17 @@ export default function Login() {
     e.preventDefault();
     if (!configured) return;
     setError("");
+    setSuccess("");
     setLoading(true);
     try {
-      if (mode === "in") await signInWithEmail(email, password);
-      else await signUpWithEmail(email, password, name);
+      if (mode === "reset") {
+        await resetPassword(email);
+        setSuccess("Password reset email sent! Check your inbox.");
+      } else if (mode === "in") {
+        await signInWithEmail(email, password);
+      } else {
+        await signUpWithEmail(email, password, name);
+      }
     } catch (e: any) {
       setError(e.message?.replace("Firebase: ", "").replace(/\s*\(auth\/.*\)\.?/, "") || "Something went wrong");
     } finally {
@@ -115,38 +124,43 @@ export default function Login() {
 
             {/* Subtitle */}
             <p className="text-ig-subtle text-sm text-center leading-snug">
-              {mode === "in"
+              {mode === "reset"
+                ? "Enter your email to receive a password reset link."
+                : mode === "in"
                 ? "Sign in to see photos and videos from your friends."
                 : "Sign up to see photos and videos from your friends."}
             </p>
 
-            {/* Google button */}
-            <button
-              type="button"
-              onClick={handleGoogle}
-              disabled={!isReady || googleLoading}
-              data-testid="button-google-signin"
-              className="w-full flex items-center justify-center gap-2 bg-ig-primary hover:bg-ig-primaryHover active:brightness-90 transition-all rounded-lg py-2 font-semibold text-sm text-white disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {googleLoading ? (
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48">
-                  <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
-                  <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.2 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
-                  <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.5 2.4-7.2 2.4-5.3 0-9.7-3.4-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
-                  <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2.1-2.1 3.9-3.9 5.2l6.2 5.2C40.7 35.2 44 30 44 24c0-1.3-.1-2.4-.4-3.5z"/>
-                </svg>
-              )}
-              {googleLoading ? "Signing in…" : "Continue with Google"}
-            </button>
+            {/* Google button — hide on reset mode */}
+            {mode !== "reset" && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleGoogle}
+                  disabled={!isReady || googleLoading}
+                  data-testid="button-google-signin"
+                  className="w-full flex items-center justify-center gap-2 bg-ig-primary hover:bg-ig-primaryHover active:brightness-90 transition-all rounded-lg py-2 font-semibold text-sm text-white disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {googleLoading ? (
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 48 48">
+                      <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/>
+                      <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.2 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+                      <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.5 2.4-7.2 2.4-5.3 0-9.7-3.4-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+                      <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2.1-2.1 3.9-3.9 5.2l6.2 5.2C40.7 35.2 44 30 44 24c0-1.3-.1-2.4-.4-3.5z"/>
+                    </svg>
+                  )}
+                  {googleLoading ? "Signing in…" : "Continue with Google"}
+                </button>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3 w-full">
-              <span className="flex-1 h-px bg-neutral-800" />
-              <span className="text-xs text-ig-subtle font-medium">OR</span>
-              <span className="flex-1 h-px bg-neutral-800" />
-            </div>
+                <div className="flex items-center gap-3 w-full">
+                  <span className="flex-1 h-px bg-neutral-800" />
+                  <span className="text-xs text-ig-subtle font-medium">OR</span>
+                  <span className="flex-1 h-px bg-neutral-800" />
+                </div>
+              </>
+            )}
 
             {/* Email/password form */}
             <form onSubmit={handleSubmit} className="w-full flex flex-col gap-2">
@@ -182,26 +196,35 @@ export default function Login() {
                 </label>
               </div>
 
-              <div className="relative">
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder=" "
-                  required
-                  minLength={6}
-                  autoComplete={mode === "in" ? "current-password" : "new-password"}
-                  data-testid="input-password"
-                  className="peer w-full border border-neutral-700 focus:border-neutral-400 rounded-lg px-3 pt-4 pb-2 text-sm bg-neutral-950 outline-none transition-colors text-white placeholder-transparent"
-                />
-                <label className="absolute left-3 top-1 text-[10px] text-ig-subtle peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-focus:top-1 peer-focus:text-[10px] transition-all pointer-events-none">
-                  Password
-                </label>
-              </div>
+              {mode !== "reset" && (
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder=" "
+                    required
+                    minLength={6}
+                    autoComplete={mode === "in" ? "current-password" : "new-password"}
+                    data-testid="input-password"
+                    className="peer w-full border border-neutral-700 focus:border-neutral-400 rounded-lg px-3 pt-4 pb-2 text-sm bg-neutral-950 outline-none transition-colors text-white placeholder-transparent"
+                  />
+                  <label className="absolute left-3 top-1 text-[10px] text-ig-subtle peer-placeholder-shown:top-3 peer-placeholder-shown:text-sm peer-focus:top-1 peer-focus:text-[10px] transition-all pointer-events-none">
+                    Password
+                  </label>
+                </div>
+              )}
 
               {mode === "in" && (
                 <div className="text-right">
-                  <span className="text-xs text-ig-primary cursor-pointer hover:underline">Forgot password?</span>
+                  <button
+                    type="button"
+                    onClick={() => switchMode("reset")}
+                    data-testid="button-forgot-password"
+                    className="text-xs text-ig-primary hover:underline"
+                  >
+                    Forgot password?
+                  </button>
                 </div>
               )}
 
@@ -214,12 +237,28 @@ export default function Login() {
                 {loading ? (
                   <>
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    {mode === "in" ? "Logging in…" : "Creating account…"}
+                    {mode === "reset" ? "Sending…" : mode === "in" ? "Logging in…" : "Creating account…"}
                   </>
+                ) : configured === null ? (
+                  "Loading…"
+                ) : mode === "reset" ? (
+                  "Send Reset Link"
+                ) : mode === "in" ? (
+                  "Log in"
                 ) : (
-                  configured === null ? "Loading…" : mode === "in" ? "Log in" : "Sign up"
+                  "Sign up"
                 )}
               </button>
+
+              {mode === "reset" && (
+                <button
+                  type="button"
+                  onClick={() => switchMode("in")}
+                  className="text-xs text-ig-subtle hover:text-white text-center mt-1 transition-colors"
+                >
+                  ← Back to login
+                </button>
+              )}
             </form>
 
             {error && (
@@ -227,34 +266,41 @@ export default function Login() {
                 {error}
               </div>
             )}
+            {success && (
+              <div className="w-full text-xs text-green-400 text-center bg-green-500/10 border border-green-500/20 rounded-lg p-2">
+                {success}
+              </div>
+            )}
           </div>
 
           {/* Switch mode card */}
-          <div className="border border-neutral-800 rounded-xl p-5 text-center text-sm bg-black">
-            {mode === "in" ? (
-              <>
-                <span className="text-ig-subtle">Don't have an account? </span>
-                <button
-                  onClick={() => switchMode("up")}
-                  data-testid="button-switch-signup"
-                  className="text-ig-primary font-semibold hover:underline"
-                >
-                  Sign up
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="text-ig-subtle">Already have an account? </span>
-                <button
-                  onClick={() => switchMode("in")}
-                  data-testid="button-switch-login"
-                  className="text-ig-primary font-semibold hover:underline"
-                >
-                  Log in
-                </button>
-              </>
-            )}
-          </div>
+          {mode !== "reset" && (
+            <div className="border border-neutral-800 rounded-xl p-5 text-center text-sm bg-black">
+              {mode === "in" ? (
+                <>
+                  <span className="text-ig-subtle">Don't have an account? </span>
+                  <button
+                    onClick={() => switchMode("up")}
+                    data-testid="button-switch-signup"
+                    className="text-ig-primary font-semibold hover:underline"
+                  >
+                    Sign up
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="text-ig-subtle">Already have an account? </span>
+                  <button
+                    onClick={() => switchMode("in")}
+                    data-testid="button-switch-login"
+                    className="text-ig-primary font-semibold hover:underline"
+                  >
+                    Log in
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {/* App store badges */}
           <div className="text-center mt-1">
