@@ -1,5 +1,7 @@
 import { getIdToken } from "./firebase";
 
+const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+
 export async function api<T = any>(
   path: string,
   opts: RequestInit & { body?: any } = {}
@@ -13,7 +15,7 @@ export async function api<T = any>(
     typeof opts.body !== "string";
   if (isJson) headers.set("Content-Type", "application/json");
 
-  const res = await fetch(path, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...opts,
     headers,
     body: isJson ? JSON.stringify(opts.body) : (opts.body as any),
