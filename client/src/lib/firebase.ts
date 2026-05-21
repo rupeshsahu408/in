@@ -16,9 +16,11 @@ let auth: Auth | null = null;
 let configured = false;
 let configPromise: Promise<any> | null = null;
 
+const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+
 async function loadConfig() {
   if (configPromise) return configPromise;
-  configPromise = fetch("/api/config")
+  configPromise = fetch(`${API_BASE}/api/config`)
     .then((r) => r.json())
     .then((cfg) => {
       if (cfg.firebase?.configured) {

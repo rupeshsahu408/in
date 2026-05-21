@@ -16,14 +16,24 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-const allowedOrigins = process.env.FRONTEND_URL
-  ? [process.env.FRONTEND_URL]
-  : true;
+const configuredOrigins = (process.env.FRONTEND_URL || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
 
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (configuredOrigins.length === 0) return cb(null, true);
+      if (configuredOrigins.includes(origin)) return cb(null, true);
+      if (/\.vercel\.app$/.test(origin) || /\.onrender\.com$/.test(origin))
+        return cb(null, true);
+      cb(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
 
 app.use(express.json({ limit: "30mb" }));
 app.use(express.urlencoded({ extended: true, limit: "30mb" }));
