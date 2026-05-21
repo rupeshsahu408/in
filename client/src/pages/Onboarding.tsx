@@ -67,13 +67,32 @@ export default function Onboarding() {
   const checkRef = useRef<ReturnType<typeof setTimeout>>();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Redirect if already onboarded
-  if (!loading && user?.onboardingComplete) return <Redirect to="/" />;
-
-  // If no email link and no auth, send to signup
-  if (!loading && !user && !isEmailLink && step !== "verifying") {
-    return <Redirect to="/signup" />;
-  }
+  // ── Final save (defined before useEffects so the welcome effect can reference it) ─
+  const handleComplete = async () => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      const isGoogle = getCurrentProvider() === "google.com";
+      if (!isGoogle && password) {
+        await setFirebasePassword(password);
+      }
+      await api("/api/users/me", {
+        method: "PATCH",
+        body: {
+          username: username.toLowerCase().replace(/[^a-z0-9._]/g, ""),
+          bio,
+          avatarUrl,
+          onboardingComplete: true,
+        },
+      });
+      await refresh();
+      setWelcomeDone(true);
+      setTimeout(() => navigate("/"), 3000);
+    } catch (e: any) {
+      setSaveError(e.message || "Something went wrong. Please try again.");
+      setSaving(false);
+    }
+  };
 
   // Pre-fill fields from existing user record (auto-generated values from sync)
   useEffect(() => {
@@ -129,6 +148,16 @@ export default function Onboarding() {
       handleComplete();
     }
   }, [step]);
+
+  // ── All hooks called above — early returns are safe here ──────────────────
+
+  // Redirect if already onboarded
+  if (!loading && user?.onboardingComplete) return <Redirect to="/" />;
+
+  // If no email link and no auth, send to signup
+  if (!loading && !user && !isEmailLink && step !== "verifying") {
+    return <Redirect to="/signup" />;
+  }
 
   // ── Username real-time check ───────────────────────────────────────────────
   const handleUsernameChange = (val: string) => {
@@ -197,32 +226,6 @@ export default function Onboarding() {
     }
   };
 
-  // ── Final save ─────────────────────────────────────────────────────────────
-  const handleComplete = async () => {
-    setSaving(true);
-    setSaveError("");
-    try {
-      const isGoogle = getCurrentProvider() === "google.com";
-      if (!isGoogle && password) {
-        await setFirebasePassword(password);
-      }
-      await api("/api/users/me", {
-        method: "PATCH",
-        body: {
-          username: username.toLowerCase().replace(/[^a-z0-9._]/g, ""),
-          bio,
-          avatarUrl,
-          onboardingComplete: true,
-        },
-      });
-      await refresh();
-      setWelcomeDone(true);
-      setTimeout(() => navigate("/"), 3000);
-    } catch (e: any) {
-      setSaveError(e.message || "Something went wrong. Please try again.");
-      setSaving(false);
-    }
-  };
 
   // ── Step navigation ────────────────────────────────────────────────────────
   const advance = () => {

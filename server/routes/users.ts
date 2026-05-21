@@ -28,6 +28,18 @@ router.get("/check-username", async (req, res) => {
   res.json({ available: !taken, username: u });
 });
 
+// Check if an email is already registered (public — used during signup to enforce one account per email)
+router.get("/check-email", async (req, res) => {
+  const email = String(req.query.email || "").trim().toLowerCase();
+  if (!email) return res.json({ exists: false });
+  const [u] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  res.json({ exists: Boolean(u) });
+});
+
 // Resolve username → email for login (public — needed before auth)
 router.get("/email-by-username", async (req, res) => {
   const username = String(req.query.username || "").toLowerCase().trim();
