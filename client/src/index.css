@@ -18,9 +18,50 @@ body {
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  scroll-behavior: smooth;
 }
 
-/* Hide scrollbars on the story tray */
+/* ── Interaction feel ─────────────────────────────────────────── */
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Universal press-down feel for clickable things */
+.pressable {
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+.pressable:active {
+  transform: scale(0.93);
+  opacity: 0.8;
+}
+
+/* Icon button press */
+.icon-btn {
+  transition: transform 120ms ease;
+}
+.icon-btn:active {
+  transform: scale(0.82);
+}
+
+/* ── Page transition ──────────────────────────────────────────── */
+.page-enter {
+  animation: pageEnter 0.18s ease-out both;
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Scrollbars ───────────────────────────────────────────────── */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -29,30 +70,10 @@ body {
   scrollbar-width: none;
 }
 
-/* Story gradient ring */
-.story-ring {
-  background: conic-gradient(from 0deg, #feda77, #f58529, #dd2a7b, #8134af, #515bd4, #feda77);
-  padding: 2.5px;
-  border-radius: 9999px;
-}
-
-.story-ring-seen {
-  background: #363636;
-  padding: 2.5px;
-  border-radius: 9999px;
-}
-
-/* Logo font */
-.logo-font {
-  font-family: "Grand Hotel", "Billabong", cursive;
-  font-weight: 400;
-}
-
-/* Custom scrollbar for desktop */
 @media (min-width: 768px) {
   ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
@@ -66,7 +87,26 @@ body {
   }
 }
 
-/* Safe-area paddings */
+/* ── Story ring ───────────────────────────────────────────────── */
+.story-ring {
+  background: conic-gradient(from 0deg, #feda77, #f58529, #dd2a7b, #8134af, #515bd4, #feda77);
+  padding: 2.5px;
+  border-radius: 9999px;
+}
+
+.story-ring-seen {
+  background: #363636;
+  padding: 2.5px;
+  border-radius: 9999px;
+}
+
+/* ── Logo font ────────────────────────────────────────────────── */
+.logo-font {
+  font-family: "Grand Hotel", "Billabong", cursive;
+  font-weight: 400;
+}
+
+/* ── Safe-area paddings ───────────────────────────────────────── */
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -74,31 +114,26 @@ body {
   padding-top: env(safe-area-inset-top);
 }
 
-/* Heart animation */
+/* ── Heart animation ──────────────────────────────────────────── */
 .heart-burst {
   animation: heartPop 0.8s ease-out forwards;
+  pointer-events: none;
 }
 
-/* Tap highlight removal */
-button,
-a {
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* Inputs reset */
+/* ── Inputs reset ─────────────────────────────────────────────── */
 input,
 textarea {
   background: transparent;
 }
 
-/* Loader */
+/* ── Spinner ──────────────────────────────────────────────────── */
 .spinner {
   border: 2px solid rgba(255, 255, 255, 0.15);
   border-top-color: #fff;
   border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  animation: spin 0.7s linear infinite;
+  width: 20px;
+  height: 20px;
+  animation: spin 0.65s linear infinite;
 }
 
 @keyframes spin {
@@ -107,7 +142,24 @@ textarea {
   }
 }
 
-/* Bottom sheet animation */
+/* ── Skeleton shimmer ─────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #1a1a1a 25%,
+    #252525 50%,
+    #1a1a1a 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Sheet animation ──────────────────────────────────────────── */
 .sheet-enter {
   animation: slideUp 0.25s ease-out;
 }
@@ -121,9 +173,28 @@ textarea {
   }
 }
 
-/* Aspect helpers */
+/* ── Aspect helpers ───────────────────────────────────────────── */
 .aspect-square > * {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* ── Fade in ──────────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes heartPop {
+  0%       { opacity: 0; transform: scale(0) translate(-50%, -50%); }
+  15%      { opacity: 0.9; transform: scale(1.25) translate(-50%, -50%); }
+  30%      { transform: scale(0.95) translate(-50%, -50%); }
+  45%, 80% { opacity: 0.9; transform: scale(1) translate(-50%, -50%); }
+  100%     { opacity: 0; transform: scale(1) translate(-50%, -50%); }
 }
